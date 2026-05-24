@@ -7,6 +7,7 @@ from pathlib import Path
 import torch
 from torch.utils.data import DataLoader, Subset
 
+from src.config import parse_args_with_config, save_resolved_config
 from src.data import PairedTransform, build_dataset, split_train_val
 from src.engine import evaluate, save_checkpoint, train_one_epoch
 from src.model import PatchForensicBranch
@@ -34,7 +35,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", default="runs/branch_c")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
-    return parser.parse_args()
+    return parse_args_with_config(parser)
 
 
 def main() -> None:
@@ -91,6 +92,7 @@ def main() -> None:
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    save_resolved_config(output_dir / "config.resolved.json", args)
     best_auroc = -1.0
     history: list[dict[str, object]] = []
 

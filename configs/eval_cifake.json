@@ -1,0 +1,15 @@
+{
+  "checkpoint": "runs/cifake_branch_c/best.pt",
+  "dataset_root": "dataset",
+  "dataset": "cifake",
+  "split": "test",
+  "batch_size": 128,
+  "num_workers": 2,
+  "semantic_size": 224,
+  "forensic_size": null,
+  "patch_size": 16,
+  "stride": 8,
+  "top_k": 4,
+  "feature_dim": 128,
+  "device": "cuda"
+}

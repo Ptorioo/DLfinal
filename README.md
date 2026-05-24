@@ -66,6 +66,24 @@ For tiny-genimage, resize the forensic view and use larger patches:
 python train.py --dataset cifake --epochs 1 --batch-size 32 --num-workers 0 --max-train-samples 128 --max-val-samples 64 --output-dir runs/smoke
 ```
 
+The same run can be controlled with JSON:
+
+```bash
+python train.py --config configs/cifake_branch_c.json
+```
+
+Command-line arguments override config values:
+
+```bash
+python train.py --config configs/cifake_branch_c.json --epochs 1 --batch-size 32 --num-workers 0 --max-train-samples 128 --max-val-samples 64 --output-dir runs/smoke
+```
+
+Each training run writes the final merged settings to:
+
+```text
+runs/<run_name>/config.resolved.json
+```
+
 ## Train on CIFAKE
 
 ```bash
@@ -78,12 +96,24 @@ Evaluate on CIFAKE test:
 python evaluate.py --checkpoint runs/cifake_branch_c/best.pt --dataset cifake --split test --batch-size 128 --patch-size 16 --stride 8 --top-k 4
 ```
 
+Or:
+
+```bash
+python evaluate.py --config configs/eval_cifake.json
+```
+
 ## Train on Tiny-GenImage
 
 Example: train only on `sdv5`, then test on unseen generators.
 
 ```bash
 python train.py --dataset tiny-genimage --generators sdv5 --epochs 10 --batch-size 64 --forensic-size 224 --patch-size 32 --stride 16 --top-k 8 --output-dir runs/tiny_sdv5_branch_c
+```
+
+Or:
+
+```bash
+python train.py --config configs/tiny_sdv5_branch_c.json
 ```
 
 Evaluate on unseen generators:
@@ -95,6 +125,7 @@ python evaluate.py --checkpoint runs/tiny_sdv5_branch_c/best.pt --dataset tiny-g
 ## Files
 
 - `src/data.py`: dataset scanning and semantic/forensic transforms
+- `src/config.py`: JSON config loading and resolved config saving
 - `src/model.py`: FFT patch selector and patch-level forensic branch
 - `src/engine.py`: training, evaluation, checkpoint helpers
 - `src/metrics.py`: accuracy, balanced accuracy, precision, recall, F1, AUROC

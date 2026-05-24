@@ -6,6 +6,7 @@ import json
 import torch
 from torch.utils.data import DataLoader, Subset
 
+from src.config import parse_args_with_config
 from src.data import PairedTransform, build_dataset
 from src.engine import evaluate, evaluate_by_generator, load_model_weights
 from src.model import PatchForensicBranch
@@ -13,7 +14,7 @@ from src.model import PatchForensicBranch
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate Branch C checkpoint")
-    parser.add_argument("--checkpoint", required=True)
+    parser.add_argument("--checkpoint", default=None)
     parser.add_argument("--dataset-root", default="dataset")
     parser.add_argument("--dataset", choices=["cifake", "tiny-genimage"], default="cifake")
     parser.add_argument("--split", choices=["train", "test", "val"], default="test")
@@ -28,7 +29,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--feature-dim", type=int, default=128)
     parser.add_argument("--max-samples", type=int, default=None)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
-    return parser.parse_args()
+    args = parse_args_with_config(parser)
+    if not args.checkpoint:
+        parser.error("--checkpoint is required, either in config JSON or on the command line.")
+    return args
 
 
 def main() -> None:
