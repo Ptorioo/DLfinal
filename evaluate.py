@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader, Subset
 from src.config import parse_args_with_config
 from src.data import PairedTransform, build_dataset
 from src.engine import evaluate, evaluate_by_generator, load_model_weights
-from src.model import PatchForensicBranch
+from src.branch_c import PatchForensicBranch
 
 
 def parse_args() -> argparse.Namespace:

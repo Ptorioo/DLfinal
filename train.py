@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader, Subset
 from src.config import parse_args_with_config, save_resolved_config
 from src.data import PairedTransform, build_dataset, split_train_val
 from src.engine import evaluate, save_checkpoint, train_one_epoch
-from src.model import PatchForensicBranch
+from src.branch_c import PatchForensicBranch
 
 
 def parse_args() -> argparse.Namespace:
