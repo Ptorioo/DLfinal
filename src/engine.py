@@ -23,15 +23,15 @@ def train_one_epoch(
     all_labels: list[torch.Tensor] = []
 
     for batch in loader:
-        images = batch["image_forensic"].to(device)
-        labels = batch["label"].to(device)
+        batch = _move_batch_to_device(batch, device)
+        labels = batch["label"]
         optimizer.zero_grad(set_to_none=True)
-        logits = model(images)["logits"]
+        logits = model(batch)["logits"]
         loss = criterion(logits, labels)
         loss.backward()
         optimizer.step()
 
-        total_loss += loss.item() * images.size(0)
+        total_loss += loss.item() * labels.size(0)
         all_logits.append(logits.detach())
         all_labels.append(labels.detach())
 
@@ -49,11 +49,11 @@ def evaluate(model: nn.Module, loader: DataLoader, device: torch.device) -> dict
     all_labels: list[torch.Tensor] = []
 
     for batch in loader:
-        images = batch["image_forensic"].to(device)
-        labels = batch["label"].to(device)
-        logits = model(images)["logits"]
+        batch = _move_batch_to_device(batch, device)
+        labels = batch["label"]
+        logits = model(batch)["logits"]
         loss = criterion(logits, labels)
-        total_loss += loss.item() * images.size(0)
+        total_loss += loss.item() * labels.size(0)
         all_logits.append(logits)
         all_labels.append(labels)
 
@@ -69,9 +69,9 @@ def evaluate_by_generator(model: nn.Module, loader: DataLoader, device: torch.de
     grouped_labels: dict[str, list[torch.Tensor]] = defaultdict(list)
 
     for batch in loader:
-        images = batch["image_forensic"].to(device)
-        labels = batch["label"].to(device)
-        logits = model(images)["logits"]
+        batch = _move_batch_to_device(batch, device)
+        labels = batch["label"]
+        logits = model(batch)["logits"]
         for index, generator in enumerate(batch["generator"]):
             grouped_logits[generator].append(logits[index].detach().cpu().unsqueeze(0))
             grouped_labels[generator].append(labels[index].detach().cpu().unsqueeze(0))
@@ -100,3 +100,10 @@ def load_model_weights(path: str | Path, model: nn.Module, device: torch.device)
     checkpoint = torch.load(path, map_location=device)
     model.load_state_dict(checkpoint["model"])
     return checkpoint
+
+
+def _move_batch_to_device(batch: dict[str, object], device: torch.device) -> dict[str, object]:
+    return {
+        key: value.to(device) if isinstance(value, torch.Tensor) else value
+        for key, value in batch.items()
+    }

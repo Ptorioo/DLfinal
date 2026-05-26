@@ -10,10 +10,11 @@ from src.config import parse_args_with_config
 from src.data import PairedTransform, build_dataset
 from src.engine import evaluate, evaluate_by_generator, load_model_weights
 from src.branch_c import PatchForensicBranch
+from src.fusion import FusionForensicDetector
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Evaluate Branch C checkpoint")
+    parser = argparse.ArgumentParser(description="Evaluate Branch A + Branch C fusion checkpoint")
     parser.add_argument("--checkpoint", default=None)
     parser.add_argument("--dataset-root", default="dataset")
     parser.add_argument("--dataset", choices=["cifake", "tiny-genimage"], default="cifake")
@@ -23,10 +24,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num-workers", type=int, default=2)
     parser.add_argument("--semantic-size", type=int, default=224)
     parser.add_argument("--forensic-size", type=int, default=None)
+    parser.add_argument("--branch-a-backbone", choices=["resnet18", "resnet34", "resnet50"], default="resnet18")
+    parser.add_argument("--branch-a-feature-dim", type=int, default=128)
+    parser.add_argument("--pretrained-branch-a", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--freeze-branch-a", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--patch-size", type=int, default=16)
     parser.add_argument("--stride", type=int, default=8)
     parser.add_argument("--top-k", type=int, default=4)
-    parser.add_argument("--feature-dim", type=int, default=128)
+    parser.add_argument("--branch-c-feature-dim", "--feature-dim", dest="branch_c_feature_dim", type=int, default=128)
+    parser.add_argument("--freeze-branch-c", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--fusion-hidden-dim", type=int, default=256)
+    parser.add_argument("--fusion-dropout", type=float, default=0.3)
     parser.add_argument("--max-samples", type=int, default=None)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     args = parse_args_with_config(parser)
@@ -55,11 +63,22 @@ def main() -> None:
         num_workers=args.num_workers,
         pin_memory=device.type == "cuda",
     )
-    model = PatchForensicBranch(
+    branch_c = PatchForensicBranch(
         patch_size=args.patch_size,
         stride=args.stride,
         top_k=args.top_k,
-        feature_dim=args.feature_dim,
+        feature_dim=args.branch_c_feature_dim,
+    )
+    model = FusionForensicDetector(
+        branch_c=branch_c,
+        branch_a_backbone=args.branch_a_backbone,
+        branch_a_feature_dim=args.branch_a_feature_dim,
+        branch_c_feature_dim=args.branch_c_feature_dim,
+        fusion_hidden_dim=args.fusion_hidden_dim,
+        fusion_dropout=args.fusion_dropout,
+        pretrained_branch_a=args.pretrained_branch_a,
+        freeze_branch_a=args.freeze_branch_a,
+        freeze_branch_c=args.freeze_branch_c,
     ).to(device)
     checkpoint = load_model_weights(args.checkpoint, model, device)
     metrics = evaluate(model, loader, device)
