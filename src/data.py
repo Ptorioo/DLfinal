@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from PIL import Image, ImageFilter
+from PIL import Image
 import torch
 from torch.utils.data import Dataset, random_split
 from torchvision import transforms
@@ -12,6 +12,7 @@ from torchvision.transforms import InterpolationMode
 
 
 IMG_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+DATASET_NAMES = ("cifake", "tiny-genimage")
 
 
 @dataclass(frozen=True)
@@ -42,20 +43,11 @@ class PairedTransform:
             std=(0.229, 0.224, 0.225),
         )
         self.to_tensor = transforms.ToTensor()
-        if train:
-            self.semantic_resize = transforms.Compose(
-                [
-                    transforms.Resize(semantic_size, interpolation=InterpolationMode.BICUBIC),
-                    transforms.RandomCrop(semantic_size, padding=4, padding_mode="reflect"),
-                ]
-            )
-        else:
-            self.semantic_resize = transforms.Compose(
-                [
-                    transforms.Resize(semantic_size, interpolation=InterpolationMode.BICUBIC),
-                    transforms.CenterCrop(semantic_size),
-                ]
-            )
+        self.semantic_resize = transforms.Resize(
+            (semantic_size, semantic_size),
+            interpolation=InterpolationMode.BICUBIC,
+        )
+        self.gaussian_blur = transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 0.8))
 
     def __call__(self, image: Image.Image) -> dict[str, torch.Tensor]:
         image = image.convert("RGB")
@@ -76,8 +68,7 @@ class PairedTransform:
         if torch.rand(()) < 0.5:
             image = image.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
         if torch.rand(()) < 0.25:
-            radius = float(torch.empty(()).uniform_(0.2, 0.8))
-            image = image.filter(ImageFilter.GaussianBlur(radius=radius))
+            image = self.gaussian_blur(image)
         return image
 
 
@@ -151,21 +142,49 @@ def build_tiny_genimage_records(
 
 def build_dataset(
     dataset_root: str | Path,
-    dataset_name: str,
+    dataset_name: str | list[str] | tuple[str, ...],
     split: str,
     transform: Callable | None,
     generators: list[str] | None = None,
 ) -> ForensicImageDataset:
     root = Path(dataset_root)
-    if dataset_name == "cifake":
-        records = build_cifake_records(root, split)
-    elif dataset_name == "tiny-genimage":
-        records = build_tiny_genimage_records(root, split, generators)
-    else:
-        raise ValueError(f"Unknown dataset: {dataset_name}")
+    dataset_names = normalize_dataset_names(dataset_name)
+    records: list[ImageRecord] = []
+    for name in dataset_names:
+        if name == "cifake":
+            records.extend(build_cifake_records(root, split))
+        elif name == "tiny-genimage":
+            records.extend(build_tiny_genimage_records(root, split, generators))
     if not records:
-        raise ValueError(f"No images found for dataset={dataset_name}, split={split}, generators={generators}")
+        raise ValueError(f"No images found for dataset={dataset_names}, split={split}, generators={generators}")
     return ForensicImageDataset(records, transform=transform)
+
+
+def normalize_dataset_names(dataset_name: str | list[str] | tuple[str, ...]) -> list[str]:
+    if isinstance(dataset_name, str):
+        raw_names = [name.strip() for name in dataset_name.split(",")]
+    else:
+        raw_names = []
+        for item in dataset_name:
+            raw_names.extend(name.strip() for name in item.split(","))
+
+    names: list[str] = []
+    for name in raw_names:
+        if not name:
+            continue
+        if name in {"all", "both"}:
+            candidates = list(DATASET_NAMES)
+        else:
+            candidates = [name]
+        for candidate in candidates:
+            if candidate not in DATASET_NAMES:
+                raise ValueError(f"Unknown dataset: {candidate}. Choose from: {', '.join(DATASET_NAMES)}")
+            if candidate not in names:
+                names.append(candidate)
+
+    if not names:
+        raise ValueError(f"At least one dataset is required. Choose from: {', '.join(DATASET_NAMES)}")
+    return names
 
 
 def split_train_val(dataset: Dataset, val_fraction: float, seed: int) -> tuple[Dataset, Dataset]:

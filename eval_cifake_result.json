@@ -1,0 +1,22 @@
+{
+  "checkpoint_epoch": 8,
+  "overall": {
+    "accuracy": 0.9738,
+    "balanced_accuracy": 0.9738,
+    "precision": 0.9575125531093086,
+    "recall": 0.9916,
+    "f1": 0.9742582039693457,
+    "auroc": 0.9981099963188171,
+    "loss": 0.06739185607731342
+  },
+  "by_generator": {
+    "stable_diffusion_1_4": {
+      "accuracy": 0.9738,
+      "balanced_accuracy": 0.9738,
+      "precision": 0.9575125531093086,
+      "recall": 0.9916,
+      "f1": 0.9742582039693457,
+      "auroc": 0.9981099963188171
+    }
+  }
+}

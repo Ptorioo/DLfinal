@@ -8,7 +8,7 @@ import torch
 from torch.utils.data import DataLoader, Subset
 
 from src.config import parse_args_with_config, save_resolved_config
-from src.data import PairedTransform, build_dataset, split_train_val
+from src.data import DATASET_NAMES, PairedTransform, build_dataset, normalize_dataset_names, split_train_val
 from src.engine import evaluate, save_checkpoint, train_one_epoch
 from src.branch_c import PatchForensicBranch
 from src.fusion import FusionForensicDetector
@@ -17,7 +17,15 @@ from src.fusion import FusionForensicDetector
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train Branch A + Branch C fusion detector")
     parser.add_argument("--dataset-root", default="dataset", help="Root directory containing cifake/ and tiny-genimage/.")
-    parser.add_argument("--dataset", choices=["cifake", "tiny-genimage"], default="cifake")
+    parser.add_argument(
+        "--dataset",
+        nargs="+",
+        default="cifake",
+        help=(
+            "Dataset(s) to train on. Use one of "
+            f"{', '.join(DATASET_NAMES)}, or pass both names / 'both' to merge them."
+        ),
+    )
     parser.add_argument("--generators", nargs="*", default=None, help="Tiny-GenImage generator names to include.")
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--batch-size", type=int, default=128)
@@ -38,6 +46,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--freeze-branch-c", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--fusion-hidden-dim", type=int, default=256)
     parser.add_argument("--fusion-dropout", type=float, default=0.3)
+    parser.add_argument("--augment", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--max-train-samples", type=int, default=None, help="Useful for quick smoke tests.")
     parser.add_argument("--max-val-samples", type=int, default=None)
     parser.add_argument("--output-dir", default="runs/fusion_a_c")
@@ -48,6 +57,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    args.dataset = normalize_dataset_names(args.dataset)
     torch.manual_seed(args.seed)
     device = torch.device(args.device)
 
@@ -55,7 +65,7 @@ def main() -> None:
         semantic_size=args.semantic_size,
         forensic_size=args.forensic_size,
         train=True,
-        augment=True,
+        augment=args.augment,
     )
     val_transform = PairedTransform(
         semantic_size=args.semantic_size,
@@ -115,6 +125,8 @@ def main() -> None:
     best_auroc = -1.0
     history: list[dict[str, object]] = []
 
+    print(f"Datasets: {', '.join(args.dataset)}")
+    print(f"Augmentation: {'enabled' if args.augment else 'disabled'}")
     print(f"Training on {len(train_subset)} images, validating on {len(val_dataset)} images.")
     print(f"Device: {device}")
     for epoch in range(1, args.epochs + 1):
