@@ -1,0 +1,9 @@
+distortion,checkpoint_epoch,dataset,split,num_samples,accuracy,balanced_accuracy,precision,recall,f1,auroc,loss
+clean,3,cifake,test,4,1.0,0.5,0.0,0.0,0.0,nan,0.0016641616821289062
+jpeg_q90,3,cifake,test,4,1.0,0.5,0.0,0.0,0.0,nan,0.0013251304626464844
+jpeg_q70,3,cifake,test,4,1.0,0.5,0.0,0.0,0.0,nan,0.0017875432968139648
+jpeg_q50,3,cifake,test,4,1.0,0.5,0.0,0.0,0.0,nan,0.007377505302429199
+jpeg_q30,3,cifake,test,4,1.0,0.5,0.0,0.0,0.0,nan,0.00273287296295166
+blur,3,cifake,test,4,1.0,0.5,0.0,0.0,0.0,nan,0.009033918380737305
+resize,3,cifake,test,4,1.0,0.5,0.0,0.0,0.0,nan,0.0031365156173706055
+noise,3,cifake,test,4,1.0,0.5,0.0,0.0,0.0,nan,0.003023505210876465

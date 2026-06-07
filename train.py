@@ -47,6 +47,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fusion-hidden-dim", type=int, default=256)
     parser.add_argument("--fusion-dropout", type=float, default=0.3)
     parser.add_argument("--augment", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument(
+        "--progress-every",
+        type=int,
+        default=25,
+        help="Print train/validation progress every N batches. Use 0 to disable.",
+    )
     parser.add_argument("--max-train-samples", type=int, default=None, help="Useful for quick smoke tests.")
     parser.add_argument("--max-val-samples", type=int, default=None)
     parser.add_argument("--output-dir", default="runs/fusion_a_c")
@@ -125,16 +131,33 @@ def main() -> None:
     best_auroc = -1.0
     history: list[dict[str, object]] = []
 
-    print(f"Datasets: {', '.join(args.dataset)}")
-    print(f"Augmentation: {'enabled' if args.augment else 'disabled'}")
-    print(f"Training on {len(train_subset)} images, validating on {len(val_dataset)} images.")
-    print(f"Device: {device}")
+    print(f"Datasets: {', '.join(args.dataset)}", flush=True)
+    print(f"Augmentation: {'enabled' if args.augment else 'disabled'}", flush=True)
+    print(f"Training on {len(train_subset)} images, validating on {len(val_dataset)} images.", flush=True)
+    print(f"Train batches: {len(train_loader)}, validation batches: {len(val_loader)}", flush=True)
+    print(f"Progress update: every {args.progress_every} batches", flush=True)
+    print(f"Device: {device}", flush=True)
     for epoch in range(1, args.epochs + 1):
-        train_metrics = train_one_epoch(model, train_loader, optimizer, device)
-        val_metrics = evaluate(model, val_loader, device)
+        train_metrics = train_one_epoch(
+            model,
+            train_loader,
+            optimizer,
+            device,
+            epoch=epoch,
+            total_epochs=args.epochs,
+            progress_every=args.progress_every,
+        )
+        val_metrics = evaluate(
+            model,
+            val_loader,
+            device,
+            epoch=epoch,
+            total_epochs=args.epochs,
+            progress_every=args.progress_every,
+        )
         row = {"epoch": epoch, "train": train_metrics, "val": val_metrics}
         history.append(row)
-        print(json.dumps(row, indent=2))
+        print(json.dumps(row, indent=2), flush=True)
 
         val_score = val_metrics["auroc"]
         if val_score != val_score:

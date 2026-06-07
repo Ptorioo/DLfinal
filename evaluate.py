@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import json
 
 import torch
 from torch.utils.data import DataLoader, Subset
 
 from src.config import parse_args_with_config
-from src.data import PairedTransform, build_dataset
+from src.data import DATASET_NAMES, PairedTransform, build_dataset, normalize_dataset_names
 from src.engine import evaluate, evaluate_by_generator, load_model_weights
 from src.branch_c import PatchForensicBranch
 from src.fusion import FusionForensicDetector
@@ -17,7 +18,15 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate Branch A + Branch C fusion checkpoint")
     parser.add_argument("--checkpoint", default=None)
     parser.add_argument("--dataset-root", default="dataset")
-    parser.add_argument("--dataset", choices=["cifake", "tiny-genimage"], default="cifake")
+    parser.add_argument(
+        "--dataset",
+        nargs="+",
+        default="cifake",
+        help=(
+            "Dataset(s) to evaluate on. Use one of "
+            f"{', '.join(DATASET_NAMES)}, or pass both names / 'both' to merge them."
+        ),
+    )
     parser.add_argument("--split", choices=["train", "test", "val"], default="test")
     parser.add_argument("--generators", nargs="*", default=None)
     parser.add_argument("--batch-size", type=int, default=128)
@@ -36,8 +45,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fusion-hidden-dim", type=int, default=256)
     parser.add_argument("--fusion-dropout", type=float, default=0.3)
     parser.add_argument("--max-samples", type=int, default=None)
+    parser.add_argument(
+        "--progress-every",
+        type=int,
+        default=25,
+        help="Print evaluation progress every N batches. Use 0 to disable.",
+    )
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     args = parse_args_with_config(parser)
+    args.dataset = normalize_dataset_names(args.dataset)
     if not args.checkpoint:
         parser.error("--checkpoint is required, either in config JSON or on the command line.")
     return args
@@ -53,8 +69,11 @@ def main() -> None:
         augment=False,
     )
     dataset = build_dataset(args.dataset_root, args.dataset, args.split, transform, generators=args.generators)
+    full_dataset_counts = _count_dataset_records(dataset)
     if args.max_samples:
         dataset = Subset(dataset, range(min(args.max_samples, len(dataset))))
+    dataset_counts = _count_dataset_records(dataset)
+    missing_datasets = [name for name in args.dataset if full_dataset_counts.get(name, 0) == 0]
 
     loader = DataLoader(
         dataset,
@@ -63,6 +82,20 @@ def main() -> None:
         num_workers=args.num_workers,
         pin_memory=device.type == "cuda",
     )
+    print(f"Datasets: {', '.join(args.dataset)}", flush=True)
+    print(f"Split: {args.split}", flush=True)
+    print(f"Dataset counts: {dict(dataset_counts)}", flush=True)
+    if args.max_samples:
+        print(f"Full split counts before --max-samples: {dict(full_dataset_counts)}", flush=True)
+    if missing_datasets:
+        print(
+            "Warning: no records were found for "
+            f"{', '.join(missing_datasets)} with split={args.split}.",
+            flush=True,
+        )
+    print(f"Evaluating {len(dataset)} images in {len(loader)} batches.", flush=True)
+    print(f"Progress update: every {args.progress_every} batches", flush=True)
+    print(f"Device: {device}", flush=True)
     branch_c = PatchForensicBranch(
         patch_size=args.patch_size,
         stride=args.stride,
@@ -81,13 +114,27 @@ def main() -> None:
         freeze_branch_c=args.freeze_branch_c,
     ).to(device)
     checkpoint = load_model_weights(args.checkpoint, model, device)
-    metrics = evaluate(model, loader, device)
+    metrics = evaluate(model, loader, device, progress_every=args.progress_every)
     result = {
         "checkpoint_epoch": checkpoint.get("epoch"),
+        "datasets": args.dataset,
+        "split": args.split,
+        "dataset_counts": dict(dataset_counts),
         "overall": metrics,
-        "by_generator": evaluate_by_generator(model, loader, device),
+        "by_generator": evaluate_by_generator(model, loader, device, progress_every=args.progress_every),
     }
     print(json.dumps(result, indent=2))
+
+
+def _count_dataset_records(dataset: object) -> Counter[str]:
+    if isinstance(dataset, Subset):
+        source = dataset.dataset
+        if hasattr(source, "records"):
+            return Counter(source.records[index].dataset for index in dataset.indices)
+        return _count_dataset_records(source)
+    if hasattr(dataset, "records"):
+        return Counter(record.dataset for record in dataset.records)
+    return Counter()
 
 
 if __name__ == "__main__":
